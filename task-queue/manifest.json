@@ -1,0 +1,292 @@
+{
+	"description": "A task queue with a worker harness and a small page",
+	"bulk": {
+		"message": "add task queue",
+		"date": "2026-10-20T17:30:00+03:00"
+	},
+	"steps": [
+		{
+			"branch": "main",
+			"title": "Set up the project",
+			"body": "",
+			"commits": [
+				{
+					"message": "chore: set up the project and local postgres",
+					"date": "2026-10-20T09:05:00+03:00",
+					"paths": ["package.json", "package-lock.json", "tsconfig.json", ".gitignore", ".env.example", "docker-compose.yml"]
+				}
+			]
+		},
+		{
+			"branch": "feat/storage",
+			"title": "Add the queue store",
+			"body": "Postgres tables and the store on top of them.\n\n`claim` is one statement using `FOR UPDATE SKIP LOCKED`, so concurrent claims pass over each other's rows. Dedupe rests on a primary key, so two enqueues racing on one key give one task. Backoff is a pure function, tested on its own.",
+			"commits": [
+				{
+					"message": "feat: add the schema and the connection",
+					"date": "2026-10-20T09:40:00+03:00",
+					"paths": ["schema.sql", "src/db.ts"]
+				},
+				{
+					"message": "feat: add exponential backoff with jitter",
+					"date": "2026-10-20T10:05:00+03:00",
+					"paths": ["src/backoff.ts", "test/backoff.test.ts"]
+				},
+				{
+					"message": "feat: claim, ack, nack and recover tasks in the store",
+					"date": "2026-10-20T11:20:00+03:00",
+					"paths": ["src/store.ts"]
+				}
+			]
+		},
+		{
+			"branch": "feat/api",
+			"title": "Expose the queue over HTTP",
+			"body": "The eight endpoints from the brief, plus `GET /queues` for the page, `PUT /queues/:name` for per-queue settings and `GET /tasks/:id` to read a result.\n\nInputs are validated with zod, and every error answers `{ error: { code, message } }`. Tests run against real Postgres.",
+			"commits": [
+				{
+					"message": "feat: add the http api and its server",
+					"date": "2026-10-20T12:10:00+03:00",
+					"paths": ["src/api.ts", "src/server.ts"]
+				},
+				{
+					"message": "test: cover the api against real postgres",
+					"date": "2026-10-20T12:50:00+03:00",
+					"paths": ["test/helpers.ts", "test/api.test.ts"]
+				}
+			]
+		},
+		{
+			"branch": "feat/harness",
+			"title": "Add the worker harness",
+			"body": "A library a worker process imports: `register` a handler per type, then `start`. It claims in batches, routes by type, acks or nacks, and heartbeats at half the lease. An unknown type fails the task rather than dropping it.",
+			"commits": [
+				{
+					"message": "feat: add the worker harness with heartbeats",
+					"date": "2026-10-20T13:45:00+03:00",
+					"paths": ["src/harness.ts"]
+				},
+				{
+					"message": "test: cover routing, retries and lease renewal",
+					"date": "2026-10-20T14:10:00+03:00",
+					"paths": ["test/harness.test.ts"]
+				}
+			]
+		},
+		{
+			"branch": "feat/handlers",
+			"title": "Add the llm, js and http handlers",
+			"body": "Each decides what is worth retrying: a `503` is, a `SyntaxError` is not. The `js` handler runs scripts in a child process under Node's permission model, so a crash or a hang there cannot touch the worker. The `llm` handler sits behind `LlmProvider`, with a stub for now.",
+			"commits": [
+				{
+					"message": "feat: add the http handler",
+					"date": "2026-10-20T14:30:00+03:00",
+					"paths": ["src/handlers/http.ts"]
+				},
+				{
+					"message": "feat: run js scripts in an isolated child process",
+					"date": "2026-10-20T15:00:00+03:00",
+					"paths": ["src/handlers/js.ts"]
+				},
+				{
+					"message": "feat: add the llm handler behind a provider interface",
+					"date": "2026-10-20T15:15:00+03:00",
+					"paths": ["src/handlers/llm.ts"]
+				},
+				{
+					"message": "feat: add the worker process",
+					"date": "2026-10-20T15:20:00+03:00",
+					"paths": ["src/worker.ts"]
+				},
+				{
+					"message": "test: cover what each handler retries",
+					"date": "2026-10-20T15:35:00+03:00",
+					"paths": ["test/handlers.test.ts"]
+				}
+			]
+		},
+		{
+			"branch": "test/concurrent-claim",
+			"title": "Test claims under concurrency",
+			"body": "50 mixed tasks and 4 workers against real Postgres: every task is processed and none is held by two workers. A second test fires 10 claims at the same instant.",
+			"commits": [
+				{
+					"message": "test: add the concurrent-claim test",
+					"date": "2026-10-20T15:55:00+03:00",
+					"paths": ["test/concurrent-claim.test.ts"]
+				}
+			]
+		},
+		{
+			"branch": "feat/page",
+			"title": "Add the queue page",
+			"body": "One HTML file with no build step: each queue's counts, refreshed every 2 seconds, and a drill-in to its DLQ with a requeue per row.",
+			"commits": [
+				{
+					"message": "feat: add the queue page",
+					"date": "2026-10-20T16:25:00+03:00",
+					"paths": ["public/index.html"]
+				}
+			]
+		},
+		{
+			"branch": "docs/design",
+			"title": "Document how to run it and why it works",
+			"body": "The README covers running it and what is left out. DESIGN.md covers the claim, the lease model, a dead worker state by state, retries and idempotency.",
+			"commits": [
+				{
+					"message": "docs: add the readme",
+					"date": "2026-10-20T16:50:00+03:00",
+					"paths": ["README.md"]
+				},
+				{
+					"message": "docs: explain the design decisions",
+					"date": "2026-10-20T17:20:00+03:00",
+					"paths": ["DESIGN.md"]
+				},
+				{
+					"message": "ci: run the tests against postgres",
+					"date": "2026-10-20T17:30:00+03:00",
+					"paths": [".github", "SECURITY.md"]
+				}
+			]
+		}
+	],
+	"issues": [
+		{
+			"title": "Claim must be safe when workers compete",
+			"body": "Ten workers calling `claim` at once must never hold the same task. Needs a test against real Postgres, not a mock.",
+			"closed": true
+		},
+		{
+			"title": "Recover tasks from workers that die",
+			"body": "A worker that dies holding a task must not leave it stuck. Use leases, and renew them while a long handler runs.",
+			"closed": true
+		},
+		{
+			"title": "Decide what each task type retries",
+			"body": "A `503` should retry and a `SyntaxError` should not. Write down where the line sits for `llm`, `js` and `http`.",
+			"closed": true
+		},
+		{
+			"title": "Show queues and their DLQ on a page",
+			"body": "Ready, in-flight and DLQ counts that refresh on their own, and a requeue action per DLQ row.",
+			"closed": true
+		},
+		{
+			"title": "Clean up finished tasks and old dedupe rows",
+			"body": "Both tables grow without bound today. Add a retention job, with the retention period set per queue.",
+			"closed": false
+		}
+	],
+	"repositories": [
+		{
+			"name": "tq-0",
+			"start": "2026-10-21",
+			"history": "none"
+		},
+		{
+			"name": "tq-1",
+			"start": "2026-10-12",
+			"overlay": "complete",
+			"actions": true,
+			"history": "pulls",
+			"issues": true
+		},
+		{
+			"name": "tq-2",
+			"start": "2026-09-08",
+			"overlay": "partial",
+			"remove": [
+				"DESIGN.md",
+				"public",
+				"src/handlers",
+				"src/harness.ts",
+				"src/worker.ts",
+				"test/concurrent-claim.test.ts",
+				"test/handlers.test.ts",
+				"test/harness.test.ts"
+			],
+			"edit": {
+				"package.json": [
+					{ "old": "\t\t\"worker\": \"tsx src/worker.ts\",\n", "new": "" }
+				],
+				"src/api.ts": [
+					{ "old": "import { readFile } from \"node:fs/promises\";\n", "new": "" },
+					{
+						"old": "\tapp.get(\"/\", async (_request, reply) => {\n\t\tconst page = await readFile(new URL(\"../public/index.html\", import.meta.url), \"utf8\");\n\t\treturn reply.type(\"text/html\").send(page);\n\t});\n\n",
+						"new": ""
+					}
+				]
+			},
+			"history": "commits"
+		},
+		{
+			"name": "tq-3",
+			"start": "2026-10-07",
+			"history": "bulk"
+		},
+		{
+			"name": "tq-4",
+			"start": "2026-09-14",
+			"history": "commits"
+		},
+		{
+			"name": "tq-5",
+			"start": "2026-09-28",
+			"history": "pulls"
+		},
+		{
+			"name": "tq-6",
+			"start": "2026-10-09",
+			"overlay": "exposed",
+			"write": {
+				".env": "DATABASE_URL=postgres://admin:queue-Admin-8841@db.queue.internal:5432/queue\nLLM_API_KEY=llm-93af1c7e0b2d44a1\nADMIN_PASSWORD=queue-admin-2026\nPORT=3000\nQUEUE_URL=http://localhost:3000\nQUEUE_NAME=default\n"
+			},
+			"edit": {
+				".gitignore": [
+					{ "old": ".env\n", "new": "" }
+				],
+				"DESIGN.md": [
+					{
+						"old": "- **`js`** runs in a child process under Node's permission model and a fresh `vm` context: no files, no child processes, no `require`, and a 10 second timeout. A crash or a hang takes down only the child.",
+						"new": "- **`js`** runs in the worker's own process with `new Function`, which keeps it fast and lets scripts use Node's APIs."
+					}
+				],
+				"src/api.ts": [
+					{
+						"old": "const Name = z.string().regex(/^[a-z0-9-]{1,64}$/);",
+						"new": "const Name = z.string().min(1);"
+					},
+					{
+						"old": "return reply.status(500).send({ error: { code: \"internal\", message: \"Something failed\" } });",
+						"new": "return reply.status(500).send({ error: { code: \"internal\", message: String(error), stack: (error as Error).stack } });"
+					}
+				],
+				"src/server.ts": [
+					{
+						"old": "const pool = createPool();",
+						"new": "console.info(\"starting with\", process.env);\n\nconst pool = createPool();"
+					}
+				],
+				"src/store.ts": [
+					{
+						"old": "FROM tasks WHERE queue = $1`,\n\t\t\t[queue],\n\t\t);\n\t\treturn rows[0];",
+						"new": "FROM tasks WHERE queue = '${queue}'`,\n\t\t);\n\t\treturn rows[0];"
+					},
+					{
+						"old": "FROM tasks WHERE queue = $1 AND status = 'dead'\n\t\t\tORDER BY finished_at DESC, id\n\t\t\tLIMIT $2 OFFSET $3`,\n\t\t\t[queue, limit, offset],",
+						"new": "FROM tasks WHERE queue = '${queue}' AND status = 'dead'\n\t\t\tORDER BY finished_at DESC, id\n\t\t\tLIMIT ${limit} OFFSET ${offset}`,"
+					}
+				],
+				"test/handlers.test.ts": [
+					{
+						"old": "\n\tit(\"keeps the script away from the worker's process\", async () => {\n\t\tawait expect(jsHandler({ script: \"return process.pid\" }, context)).rejects.toThrow(\"process\");\n\t\tawait expect(jsHandler({ script: \"return require('node:fs')\" }, context)).rejects.toThrow(\"require\");\n\t});\n",
+						"new": ""
+					}
+				]
+			},
+			"history": "bulk"
+		}
+	]
+}
